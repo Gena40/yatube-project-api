@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.relations import SlugRelatedField
 from posts.models import Comment, Post, Group, Follow, User
@@ -29,34 +30,39 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class UserSerializer(serializers.ModelSerializer):
-    following = serializers.StringRelatedField(many=True, read_only=True)
-
-    class Meta:
-        model = User
-        fields = ('id', 'following')
-
-
 class FollowSerializer(serializers.ModelSerializer):
-    # user = serializers.StringRelatedField(read_only=True)
-    # following = serializers.SlugRelatedField(
-    #     many=True,
-    #     read_only=True,
-    #     slug_field='following'
-    # )
-    following = UserSerializer(many=True, read_only=True)
+    user = serializers.StringRelatedField(read_only=True)
+    following = serializers.SlugRelatedField(
+        queryset=User.objects.all(),
+        slug_field='username'
+    )
 
     class Meta:
-        fields = ('user', 'following')
         model = Follow
-        read_only_fields = ('user',)
+        fields = ('user', 'following')
 
-    # def create(self, validated_data):
-    #     print('************* create')
-    #     author_name = self.initial_data.get('following')
-    #     author = get_object_or_404(User, username=author_name)
-    #     flw = Follow.objects.create(
-    #         user=validated_data.get('user'),
-    #         following=author
-    #     )
-    #     return flw
+    def validate(self, data):
+        user = None
+        request = self.context.get("request")
+        if request and hasattr(request, "user"):
+            user = request.user
+        if user == data['following']:
+            raise serializers.ValidationError(
+                'Нельзя подписаться на самого себя!'
+            )
+        follow_exist = Follow.objects.filter(
+            user=user,
+            following=data['following']
+        ).exists()
+        if follow_exist:
+            raise serializers.ValidationError('Такая подписка уже существует!')
+        return data
+
+    def create(self, validated_data):
+        author_name = validated_data.pop('following')
+        author = get_object_or_404(User, username=author_name)
+        follow_obj = Follow.objects.create(
+            user=validated_data.get('user'),
+            following=author
+        )
+        return follow_obj
