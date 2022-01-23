@@ -31,7 +31,10 @@ class GroupSerializer(serializers.ModelSerializer):
 
 
 class FollowSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only=True)
+    user = serializers.SlugRelatedField(
+        read_only=True,
+        slug_field='username'
+    )
     following = serializers.SlugRelatedField(
         queryset=User.objects.all(),
         slug_field='username'
@@ -43,8 +46,8 @@ class FollowSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = None
-        request = self.context.get("request")
-        if request and hasattr(request, "user"):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
             user = request.user
         if user == data['following']:
             raise serializers.ValidationError(
